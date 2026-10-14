@@ -1,0 +1,60 @@
+services:
+  # ------------------------------------------------------------
+  # 1. DỊCH VỤ DATABASE
+  # ------------------------------------------------------------
+  mysql-db:
+    # -> ĐỔI NẾU KHÁC DỰ ÁN: Nếu dùng PostgreSQL thì đổi thành 'postgres:15-alpine'
+    image: mysql:8.0
+    container_name: restapi_mysql
+    restart: always
+    environment:
+      # -> ĐỔI NẾU KHÁC DỰ ÁN: Đổi password và tên database đúng với application.properties của dự án mới
+      MYSQL_ROOT_PASSWORD: 1234$
+      MYSQL_DATABASE: db_cntt3_api_ss4
+    ports:
+      # -> ĐỔI NẾU KHÁC DỰ ÁN: Cổng ngoài host : Cổng container (PostgreSQL là 5432:5432)
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p1234$"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------------------------------------------
+  # 2. DỊCH VỤ BACKEND: SPRING BOOT
+  # ------------------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Tên image chứa username Docker Hub 'phuonglinhle'
+    image: phuonglinhle/ptit-demo-final:latest
+    container_name: restapi_backend
+    restart: unless-stopped
+    ports:
+      # -> ĐỔI NẾU KHÁC DỰ ÁN: Port_Host : Port_Container (ví dụ "8081:8080" nếu host bị trùng port 8080)
+      - "8080:8080"
+    environment:
+      # -> ĐỔI NẾU KHÁC DỰ ÁN: Hostname trỏ vào service 'mysql-db' (không dùng localhost), đổi tên database 'db_cntt3_api_ss4'
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/db_cntt3_api_ss4?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+      # -> ĐỔI NẾU KHÁC DỰ ÁN: Username/password khớp với cấu hình ở service mysql-db phía trên
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: 1234$
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+    depends_on:
+      mysql-db:
+        condition: service_healthy
+    networks:
+      - app-network
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge
